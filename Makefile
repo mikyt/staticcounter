@@ -1,5 +1,5 @@
 #Neeeds gcc >= 4.5
-GCC=gcc
+GCC=g++
 RM=rm
 
 PLUGIN_SOURCE_FILES=staticcounter.cpp
