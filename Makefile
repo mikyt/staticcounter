@@ -5,10 +5,14 @@ RM=rm
 PLUGIN_SOURCE_FILES=staticcounter.cpp featureextractor.cpp
 PLUGIN_OBJECT_FILES= $(patsubst %.cpp,%.o,$(PLUGIN_SOURCE_FILES))
 GCCPLUGINS_DIR:= $(shell $(GCC) -print-file-name=plugin)
-CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -O2
-      
-staticcounter.so: $(PLUGIN_OBJECT_FILES)
-	$(GCC) -shared $^ -o $@
+CXXFLAGS+= -I$(GCCPLUGINS_DIR)/include -fPIC -O2 -g
+
+staticcounter.so: $(PLUGIN_OBJECT_FILES) 
+	$(GCC) -shared  $(PLUGIN_OBJECT_FILES) -g -o $@ -lrt
+
+staticcounter.o: valuevector.h featureextractor.h
+
+featureextractor.o: valuevector.h featureextractor.h
 
 clean:
-	$(RM) -rf *.so *.cpp~ *.o
+	$(RM) -rf *.so *.*~ *.o
