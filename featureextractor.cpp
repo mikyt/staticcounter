@@ -10,6 +10,7 @@
 #include "function.h"
 #include "basic-block.h"
 #include "libiberty.h"
+#include "rtl.h"
 
 const char * function_name(struct function *fun) {
     const char* name;
@@ -80,6 +81,115 @@ unsigned int count_bb_two_predecessors(struct function *fun) {
     return count;
 }
 
+unsigned int count_bb_more_two_predecessors(struct function *fun) {
+    unsigned int count = 0;
+    
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        if(EDGE_COUNT(bb->preds)>2) {
+            count++;
+        }
+    }
+    return count;
+}
+
+
+unsigned int count_bb_pred_succ(struct function *fun, unsigned int pred, unsigned int succ) {
+    unsigned int count = 0;
+    
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        if(EDGE_COUNT(bb->preds)==pred && EDGE_COUNT(bb->succs)==succ) {
+            count++;
+        }
+    }
+    return count;
+}
+
+unsigned int count_bb_single_pred_single_succ(struct function *fun) {
+    return count_bb_pred_succ(fun, 1, 1);
+}
+
+unsigned int count_bb_single_pred_two_succ(struct function *fun) {
+    return count_bb_pred_succ(fun, 1, 2);
+}
+
+unsigned int count_bb_two_pred_single_succ(struct function *fun) {
+    return count_bb_pred_succ(fun, 2, 1);
+}
+
+unsigned int count_bb_two_pred_two_succ(struct function *fun) {
+    return count_bb_pred_succ(fun, 2, 2);
+}
+
+unsigned int count_bb_more_two_pred_more_two_succ(struct function *fun) {
+    unsigned int count = 0;
+    
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        if(EDGE_COUNT(bb->preds)>2 && EDGE_COUNT(bb->succs)>2) {
+            count++;
+        }
+    }
+    return count;
+}
+
+bool in_rtl_form_p (const struct basic_block_def *bb) {
+    return bb->flags && BB_RTL;
+}
+
+unsigned int count_bb_inst(const struct basic_block_def *bb) {
+    if ( ! in_rtl_form_p(bb) ) {
+        std::cerr << "Basic block not in RTL form\n" << std::endl;
+        exit(-1);
+    }
+    
+    rtx insn;
+    
+    unsigned int insn_count = 0;
+    FOR_BB_INSNS(bb, insn) {
+        insn_count++;
+    }
+    
+    return insn_count;
+}
+
+unsigned int count_bb_less_15_inst(const struct function *fun) {
+    unsigned int count = 0;
+    
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        if(count_bb_inst(bb) < 15) {
+            count++;
+        }
+    }
+    return count;
+}
+
+unsigned int count_bb_between_15_and_500_inst(const struct function *fun) {
+    unsigned int count = 0;
+    
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        unsigned int bb_inst_count (count_bb_inst(bb));
+        if( bb_inst_count >= 15 && bb_inst_count <= 500 ) {
+            count++;
+        }
+    }
+    return count;
+}
+
+unsigned int count_bb_more_500_inst(const struct function *fun) {
+    unsigned int count = 0;
+    
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        if(count_bb_inst(bb) > 500) {
+            count++;
+        }
+    }
+    return count;
+}
 
 extern "C" void all_passes_end_callback(void *gcc_data, void *user_data) {
     using namespace boost::interprocess;
@@ -110,5 +220,15 @@ extern "C" void all_passes_end_callback(void *gcc_data, void *user_data) {
     (*values)[avg_basic_block_more_two_successors].update_average(count_bb_more_two_successors(cfun));
     (*values)[avg_basic_block_single_predecessor].update_average(count_bb_single_predecessor(cfun));
     (*values)[avg_basic_block_two_predecessor].update_average(count_bb_two_predecessors(cfun));
+    (*values)[avg_basic_block_more_two_predecessor].update_average(count_bb_more_two_predecessors(cfun));
+    (*values)[avg_basic_block_single_pred_single_succ].update_average(count_bb_single_pred_single_succ(cfun));
+    (*values)[avg_basic_block_single_pred_two_succ].update_average(count_bb_single_pred_two_succ(cfun));
+    (*values)[avg_basic_block_two_pred_single_succ].update_average(count_bb_two_pred_single_succ(cfun));
+    (*values)[avg_basic_block_two_pre_two_succ].update_average(count_bb_two_pred_two_succ(cfun));
+    (*values)[avg_basic_block_more_two_pred_more_two_succ].update_average(count_bb_more_two_pred_more_two_succ(cfun));
+    (*values)[avg_basic_block_less_15_inst].update_average(count_bb_less_15_inst(cfun));
+    (*values)[avg_basic_block_between_15_and_500_inst].update_average(count_bb_between_15_and_500_inst(cfun));
+    (*values)[avg_basic_block_more_500_inst].update_average(count_bb_more_500_inst(cfun));
+    (*values)[avg_edges_in_cfg].update_average(n_edges_for_function(cfun));
     
 }
