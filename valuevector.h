@@ -12,46 +12,18 @@
 #define SHM_NAME_PREFIX "staticcounter"
 
 typedef enum {
-    avg_basic_block_number, 
-    avg_basic_block_single_successor,
-    avg_basic_block_two_successors,
-    avg_basic_block_more_two_successors,
-    avg_basic_block_single_predecessor,
-    avg_basic_block_two_predecessor,
-    avg_basic_block_more_two_predecessor,
-    avg_basic_block_single_pred_single_succ,
-    avg_basic_block_single_pred_two_succ,
-    avg_basic_block_two_pred_single_succ,
-    avg_basic_block_two_pre_two_succ,
-    avg_basic_block_more_two_pred_more_two_succ,
-    avg_basic_block_less_15_inst,
-    avg_basic_block_between_15_and_500_inst,
-    avg_basic_block_more_500_inst,
-    avg_edges_in_cfg,
+#define feature(f) f,
+#include "featurelist.inc"
+#undef feature
     LAST
 } feature_t;
 
 static std::string featurestring(const int feature) {
-#define tostring(s) case s: return #s
+#define feature(s) case s: return #s;
     switch(feature) {
-        tostring(avg_basic_block_number);
-        tostring(avg_basic_block_single_successor);
-        tostring(avg_basic_block_two_successors);
-        tostring(avg_basic_block_more_two_successors);
-        tostring(avg_basic_block_single_predecessor);
-        tostring(avg_basic_block_two_predecessor);
-        tostring(avg_basic_block_more_two_predecessor);
-        tostring(avg_basic_block_single_pred_single_succ);
-        tostring(avg_basic_block_single_pred_two_succ);
-        tostring(avg_basic_block_two_pred_single_succ);
-        tostring(avg_basic_block_two_pre_two_succ);
-        tostring(avg_basic_block_more_two_pred_more_two_succ);
-        tostring(avg_basic_block_less_15_inst);
-        tostring(avg_basic_block_between_15_and_500_inst);
-        tostring(avg_basic_block_more_500_inst);
-        tostring(avg_edges_in_cfg);
+#include "featurelist.inc"
     }
-#undef tostring        
+#undef feature
 }
 
 
