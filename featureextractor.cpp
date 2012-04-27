@@ -1,16 +1,25 @@
-#include "featureextractor.h"
+
 
 #include "valuevector.h"
 
 #include "gcc-plugin.h"
+#include "tree.h"
 #include "diagnostic.h"
 #include "tm.h"
 #include "tree-pass.h"
 #include "string.h"
 #include "function.h"
 #include "basic-block.h"
-#include "libiberty.h"
+#include "gimple.h"
+
+/* Declared in rtl.h 
+ * Needs forward declaration to force C linkage */
+extern "C" int print_rtl_single(FILE*, const_rtx);
 #include "rtl.h"
+
+
+
+#include "featureextractor.h"
 
 const char * function_name(struct function *fun) {
     const char* name;
@@ -21,7 +30,7 @@ const char * function_name(struct function *fun) {
 }
 
 
-unsigned int count_bb_single_successor(struct function *fun) {
+unsigned int count_bb_single_successor(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -33,7 +42,7 @@ unsigned int count_bb_single_successor(struct function *fun) {
     return count;
 }
 
-unsigned int count_bb_two_successors(struct function *fun) {
+unsigned int count_bb_two_successors(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -45,7 +54,7 @@ unsigned int count_bb_two_successors(struct function *fun) {
     return count;
 }
 
-unsigned int count_bb_more_two_successors(struct function *fun) {
+unsigned int count_bb_more_two_successors(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -57,7 +66,7 @@ unsigned int count_bb_more_two_successors(struct function *fun) {
     return count;
 }
 
-unsigned int count_bb_single_predecessor(struct function *fun) {
+unsigned int count_bb_single_predecessor(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -69,7 +78,7 @@ unsigned int count_bb_single_predecessor(struct function *fun) {
     return count;
 }
 
-unsigned int count_bb_two_predecessors(struct function *fun) {
+unsigned int count_bb_two_predecessors(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -81,7 +90,7 @@ unsigned int count_bb_two_predecessors(struct function *fun) {
     return count;
 }
 
-unsigned int count_bb_more_two_predecessors(struct function *fun) {
+unsigned int count_bb_more_two_predecessors(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -94,7 +103,7 @@ unsigned int count_bb_more_two_predecessors(struct function *fun) {
 }
 
 
-unsigned int count_bb_pred_succ(struct function *fun, unsigned int pred, unsigned int succ) {
+unsigned int count_bb_pred_succ(const struct function *fun, unsigned int pred, unsigned int succ) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -106,23 +115,23 @@ unsigned int count_bb_pred_succ(struct function *fun, unsigned int pred, unsigne
     return count;
 }
 
-unsigned int count_bb_single_pred_single_succ(struct function *fun) {
+unsigned int count_bb_single_pred_single_succ(const struct function *fun) {
     return count_bb_pred_succ(fun, 1, 1);
 }
 
-unsigned int count_bb_single_pred_two_succ(struct function *fun) {
+unsigned int count_bb_single_pred_two_succ(const struct function *fun) {
     return count_bb_pred_succ(fun, 1, 2);
 }
 
-unsigned int count_bb_two_pred_single_succ(struct function *fun) {
+unsigned int count_bb_two_pred_single_succ(const struct function *fun) {
     return count_bb_pred_succ(fun, 2, 1);
 }
 
-unsigned int count_bb_two_pred_two_succ(struct function *fun) {
+unsigned int count_bb_two_pred_two_succ(const struct function *fun) {
     return count_bb_pred_succ(fun, 2, 2);
 }
 
-unsigned int count_bb_more_two_pred_more_two_succ(struct function *fun) {
+unsigned int count_bb_more_two_pred_more_two_succ(const struct function *fun) {
     unsigned int count = 0;
     
     struct basic_block_def *bb;
@@ -134,20 +143,33 @@ unsigned int count_bb_more_two_pred_more_two_succ(struct function *fun) {
     return count;
 }
 
-bool in_rtl_form_p (const struct basic_block_def *bb) {
-    return bb->flags && BB_RTL;
+void print_rtl_inst(const rtx inst) {
+    /*
+      We use print_rtl_single() which takes a FILE*, so
+      we need an fmemopen buffer to write to:
+    */
+    char buf[2048];
+    FILE *f;
+    
+    buf[0]='\0';
+    f=fmemopen(buf, sizeof(buf),  "w");
+    
+    print_rtl_single(f, inst);
+    
+    fclose(f);
+    
+    printf("%s", buf); 
 }
-
-unsigned int count_bb_inst(const struct basic_block_def *bb) {
-    if ( ! in_rtl_form_p(bb) ) {
-        std::cerr << "Basic block not in RTL form\n" << std::endl;
-        exit(-1);
-    }
     
-    rtx insn;
-    
+unsigned int count_bb_inst(const struct basic_block_def *bb) {    
     unsigned int insn_count = 0;
-    FOR_BB_INSNS(bb, insn) {
+    
+    gimple_seq instructions(bb->il.gimple->seq);
+    gimple_stmt_iterator gsi;
+    for (gsi = gsi_start (instructions); !gsi_end_p (gsi); gsi_next (&gsi))
+    {
+        gimple g = gsi_stmt (gsi);
+        
         insn_count++;
     }
     
@@ -191,44 +213,74 @@ unsigned int count_bb_more_500_inst(const struct function *fun) {
     return count;
 }
 
+// unsigned int count_assignement_inst(const struct function *fun) {
+//     unsigned int count=0;
+//     
+//     struct basic_block_def *bb;
+//     FOR_EACH_BB_FN(bb, fun) {
+//         count += count_bb_inst_by_code(bb, SET);
+//     }
+// }
+// 
+
+void perform_low_gimple_analises(WeightedValueVector *values, const struct function *fun) {
+    (*values)[avg_basic_block_number].update_average(n_basic_blocks_for_function(fun));    
+    (*values)[avg_basic_block_single_successor].update_average(count_bb_single_successor(fun));
+    (*values)[avg_basic_block_two_successors].update_average(count_bb_two_successors(fun));
+    (*values)[avg_basic_block_more_two_successors].update_average(count_bb_more_two_successors(fun));
+    (*values)[avg_basic_block_single_predecessor].update_average(count_bb_single_predecessor(fun));
+    (*values)[avg_basic_block_two_predecessor].update_average(count_bb_two_predecessors(fun));
+    (*values)[avg_basic_block_more_two_predecessor].update_average(count_bb_more_two_predecessors(fun));
+    (*values)[avg_basic_block_single_pred_single_succ].update_average(count_bb_single_pred_single_succ(fun));
+    (*values)[avg_basic_block_single_pred_two_succ].update_average(count_bb_single_pred_two_succ(fun));
+    (*values)[avg_basic_block_two_pred_single_succ].update_average(count_bb_two_pred_single_succ(fun));
+    (*values)[avg_basic_block_two_pre_two_succ].update_average(count_bb_two_pred_two_succ(fun));
+    (*values)[avg_basic_block_more_two_pred_more_two_succ].update_average(count_bb_more_two_pred_more_two_succ(fun));
+    (*values)[avg_basic_block_less_15_inst].update_average(count_bb_less_15_inst(fun));
+    (*values)[avg_basic_block_between_15_and_500_inst].update_average(count_bb_between_15_and_500_inst(fun));
+    (*values)[avg_basic_block_more_500_inst].update_average(count_bb_more_500_inst(fun));
+    (*values)[avg_edges_in_cfg].update_average(n_edges_for_function(fun));
+    
+    
+    
+    
+    
+    //(*values)[avg_method_assignment_inst].update_average(count_assignement_inst(cfun));
+}
+
+void perform_rtl_analyses(WeightedValueVector *values, const struct function *fun) {
+    
+}
+
 extern "C" void all_passes_end_callback(void *gcc_data, void *user_data) {
     using namespace boost::interprocess;
-    
-    if (strcmp(current_pass->name, "*free_cfg")!=0) {
-        return;
-    }
-    //Time to analyse the final cfg before it is erased!
-    
     char shm_name[1024];
     sprintf(shm_name, SHM_NAME_PREFIX "_%d", getppid());
-    
     //A special shared memory where we can
     //construct objects associated with a name.
     //Connect to the already created shared memory segment
     //and initialize needed resources
     static managed_shared_memory segment (open_only,
                                           shm_name);  //segment name
-
     //Find the vector using the c-string name
     static WeightedValueVector *values = segment.find<WeightedValueVector>("values").first;
-
+    
+    if (strcmp(current_pass->name, "expand")==0) {
+        //pass_expand ("expand") lowers the ir from GIMPLE to RTL.
+        //Here, we are just about to execute it.
+        //It time to perform analyses on the final version of GIMPLE
+        perform_low_gimple_analises(values, cfun);
+    }
+    
+    if (strcmp(current_pass->name, "*free_cfg")==0) {
+        //Time to analyse the final cfg before it is erased!
+        perform_rtl_analyses(values, cfun);
+        return;
+    }
+    
+    
     
 
-    (*values)[avg_basic_block_number].update_average(n_basic_blocks_for_function(cfun));
-    (*values)[avg_basic_block_single_successor].update_average(count_bb_single_successor(cfun));
-    (*values)[avg_basic_block_two_successors].update_average(count_bb_two_successors(cfun));
-    (*values)[avg_basic_block_more_two_successors].update_average(count_bb_more_two_successors(cfun));
-    (*values)[avg_basic_block_single_predecessor].update_average(count_bb_single_predecessor(cfun));
-    (*values)[avg_basic_block_two_predecessor].update_average(count_bb_two_predecessors(cfun));
-    (*values)[avg_basic_block_more_two_predecessor].update_average(count_bb_more_two_predecessors(cfun));
-    (*values)[avg_basic_block_single_pred_single_succ].update_average(count_bb_single_pred_single_succ(cfun));
-    (*values)[avg_basic_block_single_pred_two_succ].update_average(count_bb_single_pred_two_succ(cfun));
-    (*values)[avg_basic_block_two_pred_single_succ].update_average(count_bb_two_pred_single_succ(cfun));
-    (*values)[avg_basic_block_two_pre_two_succ].update_average(count_bb_two_pred_two_succ(cfun));
-    (*values)[avg_basic_block_more_two_pred_more_two_succ].update_average(count_bb_more_two_pred_more_two_succ(cfun));
-    (*values)[avg_basic_block_less_15_inst].update_average(count_bb_less_15_inst(cfun));
-    (*values)[avg_basic_block_between_15_and_500_inst].update_average(count_bb_between_15_and_500_inst(cfun));
-    (*values)[avg_basic_block_more_500_inst].update_average(count_bb_more_500_inst(cfun));
-    (*values)[avg_edges_in_cfg].update_average(n_edges_for_function(cfun));
+    
     
 }
