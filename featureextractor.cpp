@@ -176,6 +176,22 @@ unsigned int count_bb_inst(const struct basic_block_def *bb) {
     return insn_count;
 }
 
+unsigned int count_bb_inst_by_code(const struct basic_block_def *bb, enum gimple_code code) {    
+    unsigned int insn_count = 0;
+    
+    gimple_seq instructions(bb->il.gimple->seq);
+    gimple_stmt_iterator gsi;
+    for (gsi = gsi_start (instructions); !gsi_end_p (gsi); gsi_next (&gsi))
+    {
+        gimple g = gsi_stmt (gsi);
+        if (gimple_code(g) == code) {
+            insn_count++;
+        }
+    }
+    
+    return insn_count;
+}
+
 unsigned int count_bb_less_15_inst(const struct function *fun) {
     unsigned int count = 0;
     
@@ -213,17 +229,65 @@ unsigned int count_bb_more_500_inst(const struct function *fun) {
     return count;
 }
 
-// unsigned int count_assignement_inst(const struct function *fun) {
-//     unsigned int count=0;
-//     
-//     struct basic_block_def *bb;
-//     FOR_EACH_BB_FN(bb, fun) {
-//         count += count_bb_inst_by_code(bb, SET);
-//     }
-// }
-// 
+unsigned int count_inst_by_code(const struct function *fun, enum gimple_code code) {
+    unsigned int count=0;
+     
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        count += count_bb_inst_by_code(bb, code);
+    }
+    
+    return count;
+}
 
-void perform_low_gimple_analises(WeightedValueVector *values, const struct function *fun) {
+bool is_binary_integer_op_p(const_gimple stmt) {
+    if ( ! is_gimple_assign(stmt) ) {
+        return false;
+    }
+    
+    if ( ! (gimple_assign_rhs_class(stmt) == GIMPLE_BINARY_RHS)) {
+        return false;
+    }
+        
+    enum tree_code assign_code = gimple_assign_rhs_code(stmt);
+    
+    if ((assign_code >= PLUS_EXPR && assign_code <= ROUND_MOD_EXPR)
+       || (assign_code >= LSHIFT_EXPR && assign_code <= TRUTH_XOR_EXPR)) {
+        return true;
+    }
+    
+    return false;
+}
+
+unsigned int count_bb_binary_integer_ops(const struct basic_block_def *bb) {    
+    unsigned int insn_count = 0;
+    
+    gimple_seq instructions(bb->il.gimple->seq);
+    gimple_stmt_iterator gsi;
+    for (gsi = gsi_start (instructions); !gsi_end_p (gsi); gsi_next (&gsi))
+    {
+        gimple g = gsi_stmt (gsi);
+        
+        if (is_binary_integer_op_p(g)) {
+            insn_count++;
+        }
+    }
+    
+    return insn_count;
+}
+
+unsigned int count_binary_integer_ops(const struct function *fun) {
+    unsigned int count=0;
+     
+    struct basic_block_def *bb;
+    FOR_EACH_BB_FN(bb, fun) {
+        count += count_bb_binary_integer_ops(bb);
+    }
+    
+    return count;
+}
+
+void perform_low_gimple_analyses(WeightedValueVector *values, const struct function *fun) {
     (*values)[avg_basic_block_number].update_average(n_basic_blocks_for_function(fun));    
     (*values)[avg_basic_block_single_successor].update_average(count_bb_single_successor(fun));
     (*values)[avg_basic_block_two_successors].update_average(count_bb_two_successors(fun));
@@ -240,12 +304,10 @@ void perform_low_gimple_analises(WeightedValueVector *values, const struct funct
     (*values)[avg_basic_block_between_15_and_500_inst].update_average(count_bb_between_15_and_500_inst(fun));
     (*values)[avg_basic_block_more_500_inst].update_average(count_bb_more_500_inst(fun));
     (*values)[avg_edges_in_cfg].update_average(n_edges_for_function(fun));
-    
-    
-    
-    
-    
-    //(*values)[avg_method_assignment_inst].update_average(count_assignement_inst(cfun));
+    (*values)[avg_method_assignment_inst].update_average(count_inst_by_code(fun, GIMPLE_ASSIGN));
+    (*values)[avg_method_conditional_branch_inst].update_average(count_inst_by_code(fun, GIMPLE_COND));
+    (*values)[avg_method_unconditional_branch_inst].update_average(count_inst_by_code(fun, GIMPLE_GOTO));
+    (*values)[avg_method_binary_integer_ops].update_average(count_binary_integer_ops(fun));
 }
 
 void perform_rtl_analyses(WeightedValueVector *values, const struct function *fun) {
@@ -269,7 +331,7 @@ extern "C" void all_passes_end_callback(void *gcc_data, void *user_data) {
         //pass_expand ("expand") lowers the ir from GIMPLE to RTL.
         //Here, we are just about to execute it.
         //It time to perform analyses on the final version of GIMPLE
-        perform_low_gimple_analises(values, cfun);
+        perform_low_gimple_analyses(values, cfun);
     }
     
     if (strcmp(current_pass->name, "*free_cfg")==0) {
