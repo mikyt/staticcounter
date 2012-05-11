@@ -12,6 +12,7 @@
 int plugin_is_GPL_compatible;
 
 static char shm_name[1024];
+static std::string outfile_name;
 
 bool fileexists(const char *filename)
 {
@@ -28,8 +29,7 @@ extern "C" void wrap_up(void *gcc_data, void *user_data) {
     //Find the vector using the c-string name
     WeightedValueVector *values = segment.find<WeightedValueVector>("values").first;
     
-    std::string filename (OUTFILE_NAME);
-    std::ofstream outfile (filename.c_str());
+    std::ofstream outfile (outfile_name.c_str());
 
     values->to_xml(outfile);
     outfile.close();
@@ -52,7 +52,7 @@ void init_vector() {
     //The process-specific name of the shared memory area
     //NB: only the parent pid is the same for all the processes that need to
     //access this area, so we use it instead of the pid.
-    if( ! fileexists(OUTFILE_NAME)) {
+    if( ! fileexists(outfile_name.c_str())) {
     	//This should be the execution of the first instance of the plugin
         shared_memory_object::remove(shm_name);
     }
@@ -67,10 +67,27 @@ void init_vector() {
     values->resize(numfeatures);
 }
 
+void set_outfile_name(struct plugin_name_args *plugin_info) {
+    outfile_name = OUTFILE_NAME;
+    
+    for(int i=0, e=plugin_info->argc; i<e; ++i) {
+        std::string key = plugin_info->argv[i].key;
+        if(key!="outputfile") {
+            continue;
+        }
+        
+        outfile_name = plugin_info->argv[i].value;
+        return;
+    }
+}
+
 extern "C" int plugin_init(struct plugin_name_args *plugin_info, 
                 struct plugin_gcc_version *version) {
     
+    //Build shared memory name
     sprintf(shm_name, SHM_NAME_PREFIX "_%d", getppid());
+    
+    set_outfile_name(plugin_info);
     
     try {
         init_vector();
