@@ -1,0 +1,2 @@
+GCC plugin that computes some static features about the program being compiled.
+The results are stored into a XML file in the current directory.
